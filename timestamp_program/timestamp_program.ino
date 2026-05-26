@@ -26,6 +26,7 @@ const char* topic_publish = "pdytr/tr";
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
+long previous_time=0;
 
 bool cargarCredenciales() {
   // Inicializar LittleFS
@@ -108,7 +109,7 @@ void setup() {
   Serial.print("Dirección IP asignada: ");
   Serial.println(WiFi.localIP());
 
-  //wifiClient.setInsecure();
+  wifiClient.setInsecure();
 
   // Configuración del servidor MQTT
   mqttClient.setServer(MQTTSERVER, MQTTPORT);
@@ -123,7 +124,7 @@ void loop() {
 
 
   long now = millis();
-  if (now - previous_time > 1000) { // Publish every 10 seconds
+  if (now - previous_time > 500) { // Publish every 10 seconds
     previous_time = now;
 
     unsigned long timestamp = millis();
