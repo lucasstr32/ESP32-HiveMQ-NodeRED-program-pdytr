@@ -21,12 +21,48 @@ const char* MQTTPASSWORD = mqttpassword_buffer;
 const int MQTTPORT = 8883;
 const char* topic_publish = "pdytr/tr";
 
+String ca_cert_content;
 
 // Cliente MQTT
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
 long previous_time=0;
+
+
+void sincronizarHora() {
+  Serial.print("Sincronizando hora mediante NTP... ");
+  // Configura la hora UTC. Usamos servidores públicos de pools NTP
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+  // Esperamos a que el sistema operativo del ESP32 reciba la hora real
+  time_t now = time(NULL);
+  while (now < 8 * 3600 * 2) { // Espera hasta que el año sea mayor a 1970
+    delay(500);
+    Serial.print(".");
+    now = time(NULL);
+  }
+  Serial.println("\n[ÉXITO] Hora sincronizada correctamente.");
+  
+  // Imprime la hora actual en el monitor serie para verificar
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    Serial.print("Fecha/Hora actual del sistema: ");
+    Serial.println(asctime(&timeinfo));
+  }
+}
+
+bool cargarCertificadoCA(){
+  File caFile = LittleFS.open("/hivemq_ca.pem", "r");
+  if(!caFile){
+    Serial.println("[ERROR] No se encontró el archivo hivemq_ca.pem en LittleFS");
+    return false;
+  }
+  ca_cert_content = caFile.readString();
+  caFile.close();
+
+  Serial.println("[ÉXITO] Certificado CA leído en memoria.");  return true;
+}
 
 bool cargarCredenciales() {
   // Inicializar LittleFS
@@ -91,25 +127,33 @@ void setup() {
   delay(1000); // Pequeña pausa para que se estabilice el monitor serie
   
   Serial.println("\n--- Iniciando ESP32 ---");
-
-
-  if(cargarCredenciales()){
-    // Conexión WiFi
-    Serial.print("Conectando a la red WiFi: ");
-    Serial.println(WIFISSID);
-    
-    WiFi.begin(WIFISSID, WIFIPASSWORD);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print("."); // Efecto visual de carga
-    }
+  if (!cargarCredenciales() || !cargarCertificadoCA()) {
+    Serial.println("[CRÍTICO] Deteniendo ejecución por fallo en archivos del sistema.");
+    while (true) { delay(1000); }
   }
+
+
+  // Conexión WiFi
+  Serial.print("Conectando a la red WiFi: ");
+  Serial.println(WIFISSID);
+  
+  WiFi.begin(WIFISSID, WIFIPASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("."); // Efecto visual de carga
+  }
+  
+
   
   Serial.println("\n[CONECTADO] WiFi activo");
   Serial.print("Dirección IP asignada: ");
   Serial.println(WiFi.localIP());
 
-  wifiClient.setInsecure();
+  sincronizarHora();
+
+  //wifiClient.setInsecure();
+  wifiClient.setCACert(ca_cert_content.c_str());
+  Serial.println("[ÉXITO] Certificado CA aplicado al motor TLS.");
 
   // Configuración del servidor MQTT
   mqttClient.setServer(MQTTSERVER, MQTTPORT);
@@ -124,7 +168,7 @@ void loop() {
 
 
   long now = millis();
-  if (now - previous_time > 500) { // Publish every 10 seconds
+  if (now - previous_time > 1000) { 
     previous_time = now;
 
     unsigned long timestamp = millis();

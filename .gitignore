@@ -7,3 +7,4 @@ mosquitto/log/
 
 # Ignorar el archivo de credenciales locales de la placa
 **/data/config.json
+**/data/hivemq_ca.pem
