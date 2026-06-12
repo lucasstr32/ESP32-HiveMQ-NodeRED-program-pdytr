@@ -171,11 +171,16 @@ void loop() {
   if (now - previous_time > 1000) { 
     previous_time = now;
 
-    unsigned long timestamp = millis();
+    //unsigned long timestamp = millis();
 
-    char msg_buffer[20]; 
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    // Convertimos los segundos y microsegundos a milisegundos de 64 bits (Epoch de 13 dígitos)
+    unsigned long long timestamp_ntp_ms = (unsigned long long)(tv.tv_sec) * 1000 + (tv.tv_usec / 1000);
 
-    sprintf(msg_buffer, "%lu", timestamp);
+    char msg_buffer[50]; 
+
+    sprintf(msg_buffer, "{\"tr\": %llu}", timestamp_ntp_ms);
 
     Serial.print("Timestamp a enviar: ");
     Serial.println(msg_buffer);
