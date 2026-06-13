@@ -4,13 +4,14 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-// --- Buffers de credenciales ---
+// --- Credential buffers ---
 char wifissid_buffer[32];
 char wifipass_buffer[64];
 char mqttsv_buffer[64];
 char mqttusername_buffer[32];
 char mqttpassword_buffer[32];
 
+/* --- Constants that links to credential buffers */
 const char* WIFISSID     = wifissid_buffer;
 const char* WIFIPASSWORD = wifipass_buffer;
 const char* MQTTSERVER   = mqttsv_buffer;
@@ -19,32 +20,233 @@ const char* MQTTPASSWORD = mqttpassword_buffer;
 const int   MQTTPORT     = 8883;
 
 // --- Topics ---
-const char* TOPIC_DATA     = "pdytr/tr";       // Mensajes normales
-const char* TOPIC_PING     = "pdytr/ping";     // ESP32 → Node-RED
-const char* TOPIC_PONG     = "pdytr/pong";     // Node-RED → ESP32
+const char* TOPIC_DATA     = "pdytr/tr";       // real time messages
+const char* TOPIC_PING     = "pdytr/ping";     // ESP32 -> Node-RED
+const char* TOPIC_PONG     = "pdytr/pong";     // Node-RED -> ESP32
 
 // --- TLS ---
 String ca_cert_content;
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-// --- Cristian: estado de calibración ---
-const int   N_CALIBRACION    = 10;     // Cantidad de roundtrips
-const float PERCENTIL_CORTE  = 0.3f;  // Descarta el 30% más lento
+// --- Cristian algorithm variables ---
+const int   CALIBRATION_COUNT    = 10;     // roundtrip count
+const float SAMPLE_THRESHOLD    = 0.3f;  // Discard the lowest 30%
 
-volatile bool  esperando_pong    = false;
-volatile long long t1_ping       = 0;   // Timestamp de envío del PING
-long long offset_ms              = 0;   // Offset calculado (ESP32 - Node-RED)
-bool  calibracion_lista          = false;
+volatile bool  waitingPong      = false;
+volatile long long t0Ping       = 0;   // Timestamp of first ping
+long long offsetMs              = 0;   // Offset between ESP and Node-Red
+bool  calibrationReady          = false;
 
-long long rtt_muestras[N_CALIBRACION];
-int   muestras_recibidas         = 0;
-long long suma_offsets           = 0;
+long long rtt_muestras[CALIBRATION_COUNT];
+int   receivedSamples         = 0;
+long long offsetSum           = 0;
 
-long previous_time = 0;
+long previousTime = 0;
 
-// --- Utilidad: timestamp en ms desde epoch ---
-long long ahora_ms() {
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n--- Initializing ESP32 ---");
+
+  /* Loading WiFi and MQTT credentials and CA Certificate */
+  if (!loadCredentials() || !loadCACertificate()) { // while?
+    while (true) delay(1000);
+  }
+
+  /* WiFi init */
+  WiFi.begin(WIFISSID, WIFIPASSWORD);
+  while (WiFi.status() != WL_CONNECTED) { 
+    delay(500); 
+    Serial.print("."); 
+  }
+  Serial.printf("\n[WiFi OK] IP: %s\n", WiFi.localIP().toString().c_str());
+
+  timeSynch();
+
+  wifiClient.setCACert(ca_cert_content.c_str());
+  mqttClient.setServer(MQTTSERVER, MQTTPORT);
+  mqttClient.setCallback(mqttCallback);  // callback registration
+  mqttClient.setBufferSize(256);
+
+  reconnect();
+  calibrateCristian();  
+}
+
+
+//////////////////////////////////
+/// CONFIG AND SYNCH FUNCTIONS ///
+//////////////////////////////////
+
+bool loadCredentials() {
+  /* Function that loads WiFi and MQTT credentials from a JSON*/
+
+  /* Initialization of LittleFS */
+  if (!LittleFS.begin(true)) { 
+    Serial.println("[ERROR] LittleFS could not be initialized"); 
+    return false; 
+  }
+
+  /* Opening credential file */
+  File f = LittleFS.open("/config.json", "r");
+  if (!f) { 
+    Serial.println("[ERROR] config.json not found");
+    return false; 
+  }
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, f);
+  f.close();
+
+  if (err) { 
+    Serial.println("[ERROR] invalid JSON"); 
+    return false; 
+  }
+
+  /* Parsing of credentials */
+  strlcpy(wifissid_buffer,    doc["ssid"]          | "", sizeof(wifissid_buffer));
+  strlcpy(wifipass_buffer,    doc["password"]       | "", sizeof(wifipass_buffer));
+  strlcpy(mqttsv_buffer,      doc["mqtt_server"]    | "", sizeof(mqttsv_buffer));
+  strlcpy(mqttusername_buffer,doc["mqtt_username"]  | "", sizeof(mqttusername_buffer));
+  strlcpy(mqttpassword_buffer,doc["mqtt_password"]  | "", sizeof(mqttpassword_buffer));
+  
+  Serial.println("[OK] Credentials loaded successfully.");
+  return true;
+}
+
+bool loadCACertificate() {
+  /* Function that loads a CA Certificate 
+  */
+  File f = LittleFS.open("/hivemq_ca.pem", "r");
+  if (!f) { 
+    Serial.println("[ERROR] hivemq_ca.pem not found"); r
+    eturn false; 
+  }
+  ca_cert_content = f.readString();
+  f.close();
+  Serial.println("[OK] CA Certificate successfully read.");
+  return true;
+}
+
+void timeSynch() {
+  /* Function that synchronizes time with NTP */
+  Serial.print("Synchronizing time with NTP... ");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(NULL);
+  while (now < 8 * 3600 * 2) {
+    /* While time is < 1970 */
+    delay(500); 
+    Serial.print("."); 
+    now = time(NULL);
+  }
+  Serial.println("[OK] Time successfully synchronized");
+}
+
+void reconnect() {
+  /* Function that connects to MQTT broker */
+
+  while (!mqttClient.connected()) {
+    Serial.print("Connecting MQTT... ");
+    if (mqttClient.connect("ESP32Client", MQTTUSERNAME, MQTTPASSWORD)) {
+      Serial.println("[OK] MQTT Connected");
+      mqttClient.subscribe(TOPIC_PONG);  // subscribe to pong
+    } else {
+      Serial.printf("[FAILED] state=%d, retrying...\n", mqttClient.state());
+      delay(5000);
+    }
+  }
+}
+
+
+
+/////////////////////////////////
+/// RTT CALCULATION FUNCTIONS ///
+/////////////////////////////////
+
+void calibrateCristian() {
+
+  Serial.println("\n[CRISTIAN] Initializing Cristian calibration...");
+  receivedSamples = 0;
+  OffsetSum = 0;
+  int intents = 0;
+
+  while (receivedSamples < CALIBRATION_COUNT) {
+    if (intents++ > CALIBRATION_COUNT * 3) {
+      Serial.println("[ERROR] Too much calibration timeouts.");
+      return;
+    }
+    delay(200);
+    if (!doPing()) continue;
+  }
+
+  /* Bubble sort algorithm to detect outliers and recalculate offset*/
+  long long rttsSorted[CALIBRATION_COUNT];
+  memcpy(rttsSorted, rttSamples, sizeof(rttSamples));
+  for (int i = 0; i < CALIBRATION_COUNT - 1; i++)
+    for (int j = i + 1; j < CALIBRATION_COUNT; j++)
+      if (rttsSorted[j] < rttsSorted[i]) {
+        long long tmp = rttsSorted[i];
+        rttsSorted[i] = rttsSorted[j];
+        rttsSorted[j] = tmp;
+      }
+
+  /* Discarding samples by threshold */
+  long long rttMax = rttsSorted[(int)(CALIBRATION_COUNT * (1.0f - SAMPLE_THRESHOLD)) - 1];
+  Serial.printf("  Minimum RTT: %lld ms | Maximum RTT accepted: %lld ms\n",
+                rttsSorted[0], rttMax);
+
+  /* Recalculate offset with clean samples*/
+
+  long long offsets[CALIBRATION_COUNT];
+  for (int i = 0; i < CALIBRATION_COUNT; i++) {
+    offsets[i] = 0; 
+  }
+
+  int   valids = 0;
+  long long sumOfValids = 0;
+  // Reconstruimos: offset_i = t2_i - t1_i - rtt_i/2
+  // Como no guardamos t1/t2 individuales, aproximamos con suma_offsets / N
+  // y el RTT como proxy (offsets altos correlacionan con RTTs altos)
+  // → para máxima precisión, guardar offsets individuales:
+  offsetMS = offsetSum / CALIBRATION_COUNT;
+
+  calibrationReady = true;
+  Serial.printf("[CRISTIAN] Completed Cristian calibration. Offset = %lld ms\n", offsetMs);
+}
+
+
+
+
+
+bool doPing() {
+  /* Send a ping and wait a pong (blocking) */
+  t0Ping = msNow();
+  char buf[32];
+  sprintf(buf, "%lld", t0Ping);
+
+  waitingPong = true;
+  mqttClient.publish(TOPIC_PING, buf);
+
+  // Espera hasta 2 segundos
+  unsigned long start = millis();
+  while (waitingPong && (millis() - start < 2000)) {
+    mqttClient.loop();
+    delay(5);
+  }
+
+  if (waitingPong) {
+    Serial.println("  [TIMEOUT] No se recibió PONG");
+    waitingPong = false;
+    return false;
+  }
+  return true;
+}
+
+
+
+long long msNow() {
+  /* Gets timestamp */
+
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (long long)tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
@@ -53,202 +255,52 @@ long long ahora_ms() {
 // --- Callback MQTT: recibe PONG de Node-RED ---
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (strcmp(topic, TOPIC_PONG) != 0) return;
-  if (!esperando_pong) return;
+  if (!waitingPong) return;
 
-  long long t3 = ahora_ms();
+  long long t2 = nowMs();
 
   // Parsear t2 que viene en el payload del PONG
   char buf[32] = {0};
   memcpy(buf, payload, min((unsigned int)31, length));
-  long long t2 = atoll(buf);
+  long long t1 = atoll(buf);
 
-  long long rtt    = t3 - t1_ping;
-  long long offset = t2 - t1_ping - rtt / 2;  // Cristian
+  long long rtt    = t3 - t0Ping;
+  long long offset = t2 - t0Ping - rtt / 2;  // Cristian
 
-  rtt_muestras[muestras_recibidas] = rtt;
-  suma_offsets += offset;
-  muestras_recibidas++;
+  rttSamples[receivedSamples] = rtt;
+  offsetSum += offset;
+  receivedSamples++;
 
   Serial.printf("  PONG #%d | RTT: %lld ms | offset parcial: %lld ms\n",
-                muestras_recibidas, rtt, offset);
+                receivedSamples, rtt, offset);
 
-  esperando_pong = false;
+  waitingPong = false;
 }
 
-// --- Enviar un PING y esperar PONG (bloqueante con timeout) ---
-bool hacerPing() {
-  t1_ping = ahora_ms();
-  char buf[32];
-  sprintf(buf, "%lld", t1_ping);
 
-  esperando_pong = true;
-  mqttClient.publish(TOPIC_PING, buf);
 
-  // Espera hasta 2 segundos
-  unsigned long inicio = millis();
-  while (esperando_pong && (millis() - inicio < 2000)) {
-    mqttClient.loop();
-    delay(5);
-  }
 
-  if (esperando_pong) {
-    Serial.println("  [TIMEOUT] No se recibió PONG");
-    esperando_pong = false;
-    return false;
-  }
-  return true;
-}
 
-// --- Calibración completa con algoritmo de Cristian ---
-void calibrarCristian() {
-  Serial.println("\n[CRISTIAN] Iniciando calibración...");
-  muestras_recibidas = 0;
-  suma_offsets = 0;
-  int intentos = 0;
-
-  while (muestras_recibidas < N_CALIBRACION) {
-    if (intentos++ > N_CALIBRACION * 3) {
-      Serial.println("[ERROR] Demasiados timeouts en calibración.");
-      return;
-    }
-    delay(200);
-    if (!hacerPing()) continue;
-  }
-
-  // Ordenar RTTs para detectar outliers (bubble sort simple)
-  // y recalcular offset solo con las muestras más rápidas
-  long long rtts_sorted[N_CALIBRACION];
-  memcpy(rtts_sorted, rtt_muestras, sizeof(rtt_muestras));
-  for (int i = 0; i < N_CALIBRACION - 1; i++)
-    for (int j = i + 1; j < N_CALIBRACION; j++)
-      if (rtts_sorted[j] < rtts_sorted[i]) {
-        long long tmp = rtts_sorted[i];
-        rtts_sorted[i] = rtts_sorted[j];
-        rtts_sorted[j] = tmp;
-      }
-
-  // Umbral: descarta muestras con RTT mayor al percentil de corte
-  long long rtt_max = rtts_sorted[(int)(N_CALIBRACION * (1.0f - PERCENTIL_CORTE)) - 1];
-  Serial.printf("  RTT mínimo: %lld ms | RTT máximo aceptado: %lld ms\n",
-                rtts_sorted[0], rtt_max);
-
-  // Recalcular offset solo con muestras limpias
-  // Necesitamos recalcular porque suma_offsets incluye todas
-  // Repetimos el cálculo filtrando por RTT
-  // (guardamos también los offsets individuales)
-  long long offsets[N_CALIBRACION];
-  for (int i = 0; i < N_CALIBRACION; i++) {
-    offsets[i] = 0; // placeholder; recalculamos abajo
-  }
-
-  // Nota: como ya no guardamos offset por muestra separado,
-  // usamos el promedio total y restamos la contribución de outliers
-  // La forma más limpia: recalibramos descartando por índice de RTT ordenado
-  int   validas = 0;
-  long long suma_validas = 0;
-  // Reconstruimos: offset_i = t2_i - t1_i - rtt_i/2
-  // Como no guardamos t1/t2 individuales, aproximamos con suma_offsets / N
-  // y el RTT como proxy (offsets altos correlacionan con RTTs altos)
-  // → para máxima precisión, guardar offsets individuales:
-  offset_ms = suma_offsets / N_CALIBRACION;
-
-  calibracion_lista = true;
-  Serial.printf("[CRISTIAN] Calibración completa. Offset = %lld ms\n", offset_ms);
-}
-
-void sincronizarHora() {
-  Serial.print("Sincronizando hora NTP... ");
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t now = time(NULL);
-  while (now < 8 * 3600 * 2) {
-    delay(500); Serial.print("."); now = time(NULL);
-  }
-  Serial.println(" [OK]");
-}
-
-bool cargarCertificadoCA() {
-  File f = LittleFS.open("/hivemq_ca.pem", "r");
-  if (!f) { Serial.println("[ERROR] hivemq_ca.pem no encontrado"); return false; }
-  ca_cert_content = f.readString();
-  f.close();
-  Serial.println("[OK] Certificado CA leído.");
-  return true;
-}
-
-bool cargarCredenciales() {
-  if (!LittleFS.begin(true)) { Serial.println("[ERROR] LittleFS"); return false; }
-  File f = LittleFS.open("/config.json", "r");
-  if (!f) { Serial.println("[ERROR] config.json no encontrado"); return false; }
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, f);
-  f.close();
-  if (err) { Serial.println("[ERROR] JSON inválido"); return false; }
-  strlcpy(wifissid_buffer,    doc["ssid"]          | "", sizeof(wifissid_buffer));
-  strlcpy(wifipass_buffer,    doc["password"]       | "", sizeof(wifipass_buffer));
-  strlcpy(mqttsv_buffer,      doc["mqtt_server"]    | "", sizeof(mqttsv_buffer));
-  strlcpy(mqttusername_buffer,doc["mqtt_username"]  | "", sizeof(mqttusername_buffer));
-  strlcpy(mqttpassword_buffer,doc["mqtt_password"]  | "", sizeof(mqttpassword_buffer));
-  Serial.println("[OK] Credenciales cargadas.");
-  return true;
-}
-
-void reconnect() {
-  while (!mqttClient.connected()) {
-    Serial.print("Conectando MQTT... ");
-    if (mqttClient.connect("ESP32Client", MQTTUSERNAME, MQTTPASSWORD)) {
-      Serial.println("[OK]");
-      mqttClient.subscribe(TOPIC_PONG);  // ← suscribirse al PONG
-    } else {
-      Serial.printf("[FALLÓ] estado=%d, reintentando...\n", mqttClient.state());
-      delay(5000);
-    }
-  }
-}
-
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println("\n--- Iniciando ESP32 ---");
-
-  if (!cargarCredenciales() || !cargarCertificadoCA()) {
-    while (true) delay(1000);
-  }
-
-  WiFi.begin(WIFISSID, WIFIPASSWORD);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.printf("\n[WiFi OK] IP: %s\n", WiFi.localIP().toString().c_str());
-
-  sincronizarHora();
-
-  wifiClient.setCACert(ca_cert_content.c_str());
-  mqttClient.setServer(MQTTSERVER, MQTTPORT);
-  mqttClient.setCallback(mqttCallback);  // ← registrar callback
-  mqttClient.setBufferSize(256);
-
-  reconnect();
-  calibrarCristian();  // ← calibrar antes de empezar a medir
-}
 
 void loop() {
   if (!mqttClient.connected()) reconnect();
   mqttClient.loop();
 
-  if (!calibracion_lista) return;  // No medir hasta calibrar
+  if (!calibrationReady) return;  
 
   long now = millis();
-  if (now - previous_time > 1000) {
-    previous_time = now;
+  if (now - previousTime > 1000) {
+    previousTime = now;
 
-    long long t_emision = ahora_ms();
+    long long emissionTimestamp = nowMs();
 
-    // Aplicar offset de Cristian al timestamp de emisión
-    long long t_emision_corregido = t_emision + offset_ms;
+    long long emissionTimestampCorrected = emissionTimestamp + offsetMs;
 
     char msg[80];
-    sprintf(msg, "{\"tr\":%lld,\"tr_corregido\":%lld,\"offset\":%lld}",
-            t_emision, t_emision_corregido, offset_ms);
+    sprintf(msg, "{\"tr\":%lld,\"corrected_tr\":%lld,\"offset\":%lld}",
+            emissionTimestamp, emissionTimestampCorrected, offsetMs);
 
-    Serial.printf("Enviando: %s\n", msg);
+    Serial.printf("Sending: %s\n", msg);
     mqttClient.publish(TOPIC_DATA, msg);
   }
 }
