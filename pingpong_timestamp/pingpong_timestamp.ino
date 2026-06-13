@@ -29,8 +29,9 @@ String ca_cert_content;
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
+
 // --- Cristian algorithm variables ---
-const int   CALIBRATION_COUNT    = 10;     // roundtrip count
+const int   CALIBRATION_COUNT    = 10;   // roundtrip count
 const float SAMPLE_THRESHOLD    = 0.3f;  // Discard the lowest 30%
 
 volatile bool  waitingPong      = false;
@@ -38,11 +39,15 @@ volatile long long t0Ping       = 0;   // Timestamp of first ping
 long long offsetMs              = 0;   // Offset between ESP and Node-Red
 bool  calibrationReady          = false;
 
-long long rtt_muestras[CALIBRATION_COUNT];
-int   receivedSamples         = 0;
-long long offsetSum           = 0;
+struct CristianSample {
+  long long rtt;
+  long long offset;
+};
 
-long previousTime = 0;
+
+CristianSample rttSamples[CALIBRATION_COUNT];
+int receivedSamples             = 0;
+long previousTime               = 0;
 
 
 void setup() {
@@ -119,8 +124,8 @@ bool loadCACertificate() {
   */
   File f = LittleFS.open("/hivemq_ca.pem", "r");
   if (!f) { 
-    Serial.println("[ERROR] hivemq_ca.pem not found"); r
-    eturn false; 
+    Serial.println("[ERROR] hivemq_ca.pem not found"); 
+    return false; 
   }
   ca_cert_content = f.readString();
   f.close();
@@ -167,7 +172,6 @@ void calibrateCristian() {
 
   Serial.println("\n[CRISTIAN] Initializing Cristian calibration...");
   receivedSamples = 0;
-  OffsetSum = 0;
   int intents = 0;
 
   while (receivedSamples < CALIBRATION_COUNT) {
@@ -180,35 +184,31 @@ void calibrateCristian() {
   }
 
   /* Bubble sort algorithm to detect outliers and recalculate offset*/
-  long long rttsSorted[CALIBRATION_COUNT];
-  memcpy(rttsSorted, rttSamples, sizeof(rttSamples));
-  for (int i = 0; i < CALIBRATION_COUNT - 1; i++)
-    for (int j = i + 1; j < CALIBRATION_COUNT; j++)
-      if (rttsSorted[j] < rttsSorted[i]) {
-        long long tmp = rttsSorted[i];
-        rttsSorted[i] = rttsSorted[j];
-        rttsSorted[j] = tmp;
+  for (int i = 0; i < CALIBRATION_COUNT - 1; i++) {
+    for (int j = i + 1; j < CALIBRATION_COUNT; j++) {
+      if (rttSamples[j].rtt < rttSamples[i].rtt) {
+        CristianSample tmp = rttSamples[i];
+        rttSamples[i] = rttSamples[j];
+        rttSamples[j] = tmp;
       }
+    }
+  }
 
   /* Discarding samples by threshold */
-  long long rttMax = rttsSorted[(int)(CALIBRATION_COUNT * (1.0f - SAMPLE_THRESHOLD)) - 1];
+  int validCount = (int)(CALIBRATION_COUNT * (1.0f - SAMPLE_THRESHOLD));
+  long long rttMax = rttSamples[validCount - 1].rtt;
+  
   Serial.printf("  Minimum RTT: %lld ms | Maximum RTT accepted: %lld ms\n",
-                rttsSorted[0], rttMax);
+                rttSamples[0].rtt, rttMax);
 
   /* Recalculate offset with clean samples*/
 
-  long long offsets[CALIBRATION_COUNT];
-  for (int i = 0; i < CALIBRATION_COUNT; i++) {
-    offsets[i] = 0; 
+  long long sumOfValids = 0;
+  for (int i = 0; i < validCount; i++) {
+    sumOfValids += rttSamples[i].offset;
   }
 
-  int   valids = 0;
-  long long sumOfValids = 0;
-  // Reconstruimos: offset_i = t2_i - t1_i - rtt_i/2
-  // Como no guardamos t1/t2 individuales, aproximamos con suma_offsets / N
-  // y el RTT como proxy (offsets altos correlacionan con RTTs altos)
-  // → para máxima precisión, guardar offsets individuales:
-  offsetMS = offsetSum / CALIBRATION_COUNT;
+  offsetMs = sumOfValids / validCount;
 
   calibrationReady = true;
   Serial.printf("[CRISTIAN] Completed Cristian calibration. Offset = %lld ms\n", offsetMs);
@@ -252,23 +252,25 @@ long long msNow() {
   return (long long)tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
 }
 
-// --- Callback MQTT: recibe PONG de Node-RED ---
+
+
+// --- Callback MQTT: receives pong from Node-RED ---
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (strcmp(topic, TOPIC_PONG) != 0) return;
   if (!waitingPong) return;
 
-  long long t2 = nowMs();
+  long long t2 = msNow();
 
   // Parsear t2 que viene en el payload del PONG
   char buf[32] = {0};
   memcpy(buf, payload, min((unsigned int)31, length));
   long long t1 = atoll(buf);
 
-  long long rtt    = t3 - t0Ping;
-  long long offset = t2 - t0Ping - rtt / 2;  // Cristian
+  long long rtt    = t2 - t0Ping;
+  long long offset = t1 - t0Ping - rtt / 2;  // Cristian
 
-  rttSamples[receivedSamples] = rtt;
-  offsetSum += offset;
+  rttSamples[receivedSamples].rtt = rtt;
+  rttSamples[receivedSamples].offset = offset;
   receivedSamples++;
 
   Serial.printf("  PONG #%d | RTT: %lld ms | offset parcial: %lld ms\n",
@@ -292,7 +294,7 @@ void loop() {
   if (now - previousTime > 1000) {
     previousTime = now;
 
-    long long emissionTimestamp = nowMs();
+    long long emissionTimestamp = msNow();
 
     long long emissionTimestampCorrected = emissionTimestamp + offsetMs;
 
