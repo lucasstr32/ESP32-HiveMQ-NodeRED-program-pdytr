@@ -12,13 +12,14 @@ char mqttusername_buffer[32];
 char mqttpassword_buffer[32];
 
 /* --- Constants that links to credential buffers */
+const char* MQTT_BROKER_OPTION = "HiveMQ"; // "HiveMQ" "Mosquitto"
 const char* WIFISSID     = wifissid_buffer;
 const char* WIFIPASSWORD = wifipass_buffer;
 const char* MQTTSERVER   = mqttsv_buffer;
 const char* MQTTUSERNAME = mqttusername_buffer;
 const char* MQTTPASSWORD = mqttpassword_buffer;
-const int   MQTTPORT     = 8883; // para hivemq
-//const int   MQTTPORT     = 1883; // para mosquitto
+const int   MQTT_TLS_PORT = 8883;
+const int   MQTT_NO_TLS_PORT = 1883;
 
 // --- Topics ---
 const char* TOPIC_DATA     = "pdytr/tr";       // real time messages
@@ -27,13 +28,13 @@ const char* TOPIC_PONG     = "pdytr/pong";     // Node-RED -> ESP32
 
 // --- TLS ---
 String ca_cert_content;
-WiFiClientSecure wifiClient; // para hivemq
-//WiFiClient wifiClient; // para mosquitto
+WiFiClientSecure wifiClientSecure; // para hivemq
+WiFiClient wifiClient; // para mosquitto
 PubSubClient mqttClient(wifiClient);
 
 
 // --- Calibration algorithm variables ---
-const int   CALIBRATION_COUNT    = 50;   // roundtrip count
+const int   CALIBRATION_COUNT    = 100;   // roundtrip count
 const float SAMPLE_THRESHOLD    = 0.3f;  // Discard the lowest 30%
 
 volatile bool  waitingPong      = false;
@@ -73,11 +74,28 @@ void setup() {
     Serial.print("."); 
   }
   Serial.printf("\n[WiFi OK] IP: %s\n", WiFi.localIP().toString().c_str());
+  WiFi.setSleep(false);
 
-  timeSynch();
-
-  wifiClient.setCACert(ca_cert_content.c_str()); // comentar para mosquitto
-  mqttClient.setServer(MQTTSERVER, MQTTPORT);
+  
+  if(MQTT_BROKER_OPTION == "HiveMQ"){
+    Serial.println("[ENV] Configurando entorno seguro para HiveMQ Cloud...");
+    timeSynch();
+    wifiClientSecure.setCACert(ca_cert_content.c_str());
+    if (loadCACertificate()) {
+      wifiClientSecure.setCACert(ca_cert_content.c_str());
+    } else {
+      Serial.println("[CRITICAL ERROR] No se pudo cargar el certificado para HiveMQ");
+      while(1) delay(1000);
+    }
+    mqttClient.setClient(wifiClientSecure);
+    mqttClient.setServer(MQTTSERVER, MQTT_TLS_PORT);
+  } else {
+    // mosquitto
+    Serial.println("[ENV] Configurando entorno estándar para Mosquitto Local...");
+    mqttClient.setClient(wifiClient);
+    mqttClient.setServer(MQTTSERVER, MQTT_NO_TLS_PORT);
+  }
+  
   mqttClient.setCallback(mqttCallback);  // callback registration
   mqttClient.setBufferSize(256);
 
@@ -119,17 +137,18 @@ bool loadCredentials() {
   strlcpy(wifipass_buffer,    doc["password"]       | "", sizeof(wifipass_buffer));
   
   /* para hivemq */
+  if(MQTT_BROKER_OPTION == "HiveMQ"){
+    strlcpy(mqttsv_buffer,      doc["mqtt_server"]    | "", sizeof(mqttsv_buffer));
+    strlcpy(mqttusername_buffer,doc["mqtt_username"]  | "", sizeof(mqttusername_buffer));
+    strlcpy(mqttpassword_buffer,doc["mqtt_password"]  | "", sizeof(mqttpassword_buffer));
+
+  } else {
+    strlcpy(mqttsv_buffer,      doc["mosquitto_server"] , sizeof(mqttsv_buffer));
+    strlcpy(mqttusername_buffer, ""  , sizeof(mqttusername_buffer));
+    strlcpy(mqttpassword_buffer, ""  , sizeof(mqttpassword_buffer));
+    
+  }
   
-  strlcpy(mqttsv_buffer,      doc["mqtt_server"]    | "", sizeof(mqttsv_buffer));
-  strlcpy(mqttusername_buffer,doc["mqtt_username"]  | "", sizeof(mqttusername_buffer));
-  strlcpy(mqttpassword_buffer,doc["mqtt_password"]  | "", sizeof(mqttpassword_buffer));
-  
-  /* para mosquitto */
-  /**/
-  strlcpy(mqttsv_buffer,      doc["mosquitto_server"] , sizeof(mqttsv_buffer));
-  strlcpy(mqttusername_buffer, ""  , sizeof(mqttusername_buffer));
-  strlcpy(mqttpassword_buffer, ""  , sizeof(mqttpassword_buffer));
-  */
 
   Serial.println("[OK] Credentials loaded successfully.");
   return true;
