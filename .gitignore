@@ -1,12 +1,16 @@
-# Ignorar carpetas de datos generadas por Docker
 node-red-data/
+flows_*_cred.json
 
-# Ignorar datos de mosquitto pero mantener la carpeta de configuración
 mosquitto/data/
 mosquitto/log/
 
-# Ignorar el archivo de credenciales locales de la placa
 **/data/config.json
 **/data/hivemq_ca.pem
-
 .env
+
+.vagrant/
+*.box
+
+*.log
+.DS_Store
+Thumbs.db
