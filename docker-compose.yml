@@ -1,22 +1,31 @@
 services:
   mqtt:
     image: "eclipse-mosquitto:latest"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
+    restart: always
     ports:
       - "1883:1883"  # Puerto MQTT estándar
     environment:
       - TZ=America/Argentina/Buenos_Aires
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/data:/mosquitto/data
+      
   nodered:
-    image: nodered/node-red
+    image: nodered/node-red:latest
+    depends_on: 
+      - mqtt
+    restart: always
     environment:
       - TZ=America/Argentina/Buenos_Aires
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASS=${MQTT_PASS}
     ports:
       - "1880:1880" # Puerto acceso a Nodered
     volumes:
       - ./node-red-data:/data
-      - /dev/snd:/dev/snd
-    links:
-      - mqtt
+      # - ./flows_hivemq.json:/data/flows.json
+      # - ./flows_mosquitto.json:/data/flows.json
+      #- ./${FLOW_FILE:-flows_hivemq.json}:/data/flows.json
+     
+     
 
