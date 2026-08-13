@@ -1,0 +1,301 @@
+[
+  {
+    "id": "baf8fbf07fc84ccc",
+    "type": "tab",
+    "label": "HiveMQ local",
+    "disabled": false,
+    "info": "",
+    "env": []
+  },
+  {
+    "id": "e646f804d4ffc03a",
+    "type": "mqtt in",
+    "z": "baf8fbf07fc84ccc",
+    "name": "",
+    "topic": "pdytr/tr",
+    "qos": "2",
+    "datatype": "json",
+    "broker": "5f9467bc6c9ed2c0",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 170,
+    "y": 320,
+    "wires": [
+      [
+        "fb1fa141df35da9a",
+        "ba5e83dac4bf3a6e"
+      ]
+    ],
+    "username": "${MQTT_USER}"
+  },
+  {
+    "id": "f5660a036059adce",
+    "type": "function",
+    "z": "baf8fbf07fc84ccc",
+    "name": "pong!!",
+    "func": "var t2 = Date.now().toString();\nmsg.payload = t2;\nmsg.topic = \"pdytr/pong\";\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 350,
+    "y": 220,
+    "wires": [
+      [
+        "e9cf938732f658c0",
+        "4cf366df0509a17f"
+      ]
+    ]
+  },
+  {
+    "id": "e9cf938732f658c0",
+    "type": "mqtt out",
+    "z": "baf8fbf07fc84ccc",
+    "name": "",
+    "topic": "pdytr/pong",
+    "qos": "",
+    "retain": "",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "88cba5264dd5bde2",
+    "x": 570,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "7fecb52080d54fc6",
+    "type": "debug",
+    "z": "baf8fbf07fc84ccc",
+    "name": "hivemq rtt",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 560,
+    "y": 320,
+    "wires": []
+  },
+  {
+    "id": "145007fe5cf9c8b2",
+    "type": "mqtt in",
+    "z": "baf8fbf07fc84ccc",
+    "name": "",
+    "topic": "pdytr/ping",
+    "qos": "2",
+    "datatype": "json",
+    "broker": "5f9467bc6c9ed2c0",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 180,
+    "y": 220,
+    "wires": [
+      [
+        "f5660a036059adce",
+        "801cf88fa3c0dfd6"
+      ]
+    ]
+  },
+  {
+    "id": "eb85298036d55f75",
+    "type": "inject",
+    "z": "baf8fbf07fc84ccc",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "pdytr/pong",
+    "payload": "",
+    "payloadType": "date",
+    "x": 500,
+    "y": 160,
+    "wires": [
+      [
+        "e9cf938732f658c0"
+      ]
+    ]
+  },
+  {
+    "id": "801cf88fa3c0dfd6",
+    "type": "debug",
+    "z": "baf8fbf07fc84ccc",
+    "name": "debug 4",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 300,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "fb1fa141df35da9a",
+    "type": "debug",
+    "z": "baf8fbf07fc84ccc",
+    "name": "debug 5",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 260,
+    "y": 420,
+    "wires": []
+  },
+  {
+    "id": "4cf366df0509a17f",
+    "type": "debug",
+    "z": "baf8fbf07fc84ccc",
+    "name": "hivemq pong",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 530,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "ba5e83dac4bf3a6e",
+    "type": "function",
+    "z": "baf8fbf07fc84ccc",
+    "name": "rtt_function",
+    "func": "if (!msg.payload || msg.payload.corrected_tr === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_tr);\nvar t_captura           = Date.now();\n\n// Latencia real: ya con offset de calibración aplicado\nvar latencia = t_captura - t_emision_corregido;\n\nmsg.payload = {\n    t_emision_original:  Number(msg.payload.tr),\n    t_emision_corregido: t_emision_corregido,\n    t_captura:           t_captura,\n    offset_calibration:     Number(msg.payload.offset),\n    latencia_ms:         latencia\n};\n\nconst N_MENSAJES = 200;\nvar historial_latencias = context.get('historial_latencias') || [];\nvar latencia_minima = context.get('latencia_minima');\nvar latencia_maxima = context.get('latencia_maxima');\n\n\nif (historial_latencias.length === 0) {\n    latencia_minima = latencia;\n    latencia_maxima = latencia;\n} else {\n    if (latencia < latencia_minima) latencia_minima = latencia;\n    if (latencia > latencia_maxima) latencia_maxima = latencia;\n}\nhistorial_latencias.push(latencia);\ncontext.set('historial_latencias', historial_latencias);\n\ncontext.set('latencia_minima', latencia_minima);\ncontext.set('latencia_maxima', latencia_maxima);\n\nif (historial_latencias.length === N_MENSAJES) {\n    historial_latencias.sort(function (a, b) { return a - b; });\n\n    var mediana_latencia = 0;\n    var mitad = Math.floor(N_MENSAJES / 2);\n\n    // Si N es impar, la mediana es el elemento central.\n    // Si N es par (como 20), la mediana es el promedio de los dos elementos centrales.\n    if (N_MENSAJES % 2 !== 0) {\n        mediana_latencia = historial_latencias[mitad];\n    } else {\n        mediana_latencia = (historial_latencias[mitad - 1] + historial_latencias[mitad]) / 2;\n    }\n\n\n    node.warn(\"Mediana Latencia: \" + mediana_latencia + \"ms\"\n    +\" || Piso: \" + latencia_minima + \"ms\"\n    +\" || Techo\" + latencia_maxima + \"ms\");\n\n    context.set('historial_latencias', []);\n    context.set('latencia_minima', null);\n    context.set('latencia_maxima', null);\n}\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 320,
+    "wires": [
+      [
+        "7fecb52080d54fc6"
+      ]
+    ]
+  },
+  {
+    "id": "5f9467bc6c9ed2c0",
+    "type": "mqtt-broker",
+    "name": "pdytr",
+    "broker": "${MQTT_BROKER}",
+    "port": "8883",
+    "tls": "593fedb200ac0886",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": true,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "88cba5264dd5bde2",
+    "type": "mqtt-broker",
+    "name": "",
+    "broker": "${MQTT_BROKER}",
+    "port": "8883",
+    "tls": "c4c2fc3c050d7871",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": true,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "593fedb200ac0886",
+    "type": "tls-config",
+    "name": "",
+    "cert": "",
+    "key": "",
+    "ca": "",
+    "certname": "",
+    "keyname": "",
+    "caname": "hivemq_ca.pem",
+    "servername": "",
+    "verifyservercert": true,
+    "alpnprotocol": ""
+  },
+  {
+    "id": "c4c2fc3c050d7871",
+    "type": "tls-config",
+    "name": "",
+    "cert": "",
+    "key": "",
+    "ca": "",
+    "certname": "",
+    "keyname": "",
+    "caname": "hivemq_ca.pem",
+    "servername": "",
+    "verifyservercert": false,
+    "alpnprotocol": ""
+  }
+]

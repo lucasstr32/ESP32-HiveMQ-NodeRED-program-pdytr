@@ -27,7 +27,20 @@ services:
       - ./node-red-data:/data
       # - ./flows_hivemq.json:/data/flows.json
       # - ./flows_mosquitto.json:/data/flows.json
-      #- ./${FLOW_FILE:-flows_hivemq.json}:/data/flows.json
+      #- ./flows.json:/data/flows_runtime.json
+      - ./flows.json:/tmp/flows_base.json:ro
+    #entrypoint: ["/bin/sh", "/data/init.sh"]
+    
+    command: >
+      sh -c "
+      if [ ! -f /data/flows.json ]; then
+        cp /tmp/flows_base.json /data/flows.json;
+      fi;
+      npm start -- --userDir /data
+      "
+volumes:
+  nodered_data:
+  mosquitto_data:
      
      
 

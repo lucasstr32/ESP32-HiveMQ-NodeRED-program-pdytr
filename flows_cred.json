@@ -1,0 +1,10 @@
+{
+    "5f9467bc6c9ed2c0": {
+        "user": "${MQTT_USER}",
+        "password": "${MQTT_PASS}"
+    },
+    "88cba5264dd5bde2": {
+        "user": "${MQTT_USER}",
+        "password": "${MQTT_PASS}"
+    }
+}
