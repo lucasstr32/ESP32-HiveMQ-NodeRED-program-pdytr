@@ -14,6 +14,20 @@ Toda la infraestructura (Docker, Mosquitto, Node-RED) se despliega dentro de una
 * [Vagrant](https://www.vagrantup.com/) instalado.
 * Git.
 
+
+### 🔑 Configuración de Variables de Entorno (`.env`)
+
+Para configurar las credenciales y parámetros de ejecución del proyecto, debes crear un archivo llamado `.env` en la raíz de tu repositorio basándote en el siguiente ejemplo:
+
+```env
+MQTT_BROKER=tu_host.s1.eu.hivemq.cloud
+MQTT_PORT=8883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+FLOW_FILE=flows_mosquitto.json
+
+```
+
 ---
 
 ### 🛠️ Comandos Principales
