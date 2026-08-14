@@ -408,13 +408,13 @@
         "type": "file",
         "z": "1665b9e3ca9a5ffd",
         "name": "",
-        "filename": "/data/lecturas.csv",
+        "filename": "/data/results/lecturas_mosquitto.csv",
         "filenameType": "str",
         "appendNewline": true,
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "utf8",
-        "x": 650,
+        "x": 700,
         "y": 340,
         "wires": [
             []
@@ -425,13 +425,13 @@
         "type": "file",
         "z": "1665b9e3ca9a5ffd",
         "name": "",
-        "filename": "/data/mediana.json",
+        "filename": "/data/results/mediana_mosquitto.json",
         "filenameType": "str",
         "appendNewline": false,
         "createDir": true,
         "overwriteFile": "true",
         "encoding": "utf8",
-        "x": 650,
+        "x": 710,
         "y": 400,
         "wires": [
             []
@@ -644,13 +644,13 @@
         "type": "file",
         "z": "baf8fbf07fc84ccc",
         "name": "",
-        "filename": "/data/lecturas.csv",
+        "filename": "/data/results/lecturas_hivemq.csv",
         "filenameType": "str",
         "appendNewline": true,
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "utf8",
-        "x": 630,
+        "x": 680,
         "y": 380,
         "wires": [
             []
@@ -661,13 +661,13 @@
         "type": "file",
         "z": "baf8fbf07fc84ccc",
         "name": "",
-        "filename": "/data/mediana.json",
+        "filename": "/data/results/mediana_hivemq.json",
         "filenameType": "str",
         "appendNewline": false,
         "createDir": true,
         "overwriteFile": "true",
         "encoding": "utf8",
-        "x": 630,
+        "x": 680,
         "y": 440,
         "wires": [
             []

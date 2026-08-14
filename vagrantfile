@@ -80,12 +80,14 @@ Vagrant.configure("2") do |config|
     # Esperar 5 segundos para permitir que el proceso de Node-RED inicie su output
     sleep 5
 
-    # Imprime las últimas 50 líneas de logs de Node-RED y se desconecta
-    docker compose logs --tail=50 nodered
+    echo ""
+    echo " Utilice 'vagrant ssh' para acceder a la mv o "vagrant ssh -c "docker compose -f /vagrant/docker-compose.yml logs -f nodered" para ver los logs en vivo 
+    echo ""
 
     echo ""
     echo "--------------------------------------------------"
     echo " Accede a Node-RED en: http://localhost:1880"
+    echo " Los cálculos del programa se podrán encontrar en la carpeta /results de la máquina host"
     echo "--------------------------------------------------"
   SHELL
 end

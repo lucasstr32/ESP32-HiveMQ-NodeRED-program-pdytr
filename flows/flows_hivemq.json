@@ -21,11 +21,11 @@
         "rh": 0,
         "inputs": 0,
         "x": 170,
-        "y": 320,
+        "y": 420,
         "wires": [
             [
                 "fb1fa141df35da9a",
-                "ba5e83dac4bf3a6e"
+                "e522dc68b404f8bc"
             ]
         ]
     },
@@ -81,8 +81,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 560,
-        "y": 320,
+        "x": 490,
+        "y": 520,
         "wires": []
     },
     {
@@ -148,8 +148,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 300,
-        "y": 100,
+        "x": 270,
+        "y": 280,
         "wires": []
     },
     {
@@ -165,7 +165,7 @@
         "statusVal": "",
         "statusType": "auto",
         "x": 260,
-        "y": 420,
+        "y": 520,
         "wires": []
     },
     {
@@ -175,34 +175,72 @@
         "name": "hivemq pong",
         "active": true,
         "tosidebar": true,
-        "console": false,
+        "console": true,
         "tostatus": false,
         "complete": "payload",
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 530,
+        "x": 540,
         "y": 280,
         "wires": []
     },
     {
-        "id": "ba5e83dac4bf3a6e",
+        "id": "e522dc68b404f8bc",
         "type": "function",
         "z": "baf8fbf07fc84ccc",
         "name": "rtt_function",
-        "func": "if (!msg.payload || msg.payload.corrected_tr === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_tr);\nvar t_captura           = Date.now();\n\n// Latencia real: ya con offset de calibración aplicado\nvar latencia = t_captura - t_emision_corregido;\n\nmsg.payload = {\n    t_emision_original:  Number(msg.payload.tr),\n    t_emision_corregido: t_emision_corregido,\n    t_captura:           t_captura,\n    offset_calibration:     Number(msg.payload.offset),\n    latencia_ms:         latencia\n};\n\nconst N_MENSAJES = 200;\nvar historial_latencias = context.get('historial_latencias') || [];\nvar latencia_minima = context.get('latencia_minima');\nvar latencia_maxima = context.get('latencia_maxima');\n\n\nif (historial_latencias.length === 0) {\n    latencia_minima = latencia;\n    latencia_maxima = latencia;\n} else {\n    if (latencia < latencia_minima) latencia_minima = latencia;\n    if (latencia > latencia_maxima) latencia_maxima = latencia;\n}\nhistorial_latencias.push(latencia);\ncontext.set('historial_latencias', historial_latencias);\n\ncontext.set('latencia_minima', latencia_minima);\ncontext.set('latencia_maxima', latencia_maxima);\n\nif (historial_latencias.length === N_MENSAJES) {\n    historial_latencias.sort(function (a, b) { return a - b; });\n\n    var mediana_latencia = 0;\n    var mitad = Math.floor(N_MENSAJES / 2);\n\n    // Si N es impar, la mediana es el elemento central.\n    // Si N es par (como 20), la mediana es el promedio de los dos elementos centrales.\n    if (N_MENSAJES % 2 !== 0) {\n        mediana_latencia = historial_latencias[mitad];\n    } else {\n        mediana_latencia = (historial_latencias[mitad - 1] + historial_latencias[mitad]) / 2;\n    }\n\n\n    node.warn(\"Mediana Latencia: \" + mediana_latencia + \"ms\"\n    +\" || Piso: \" + latencia_minima + \"ms\"\n    +\" || Techo\" + latencia_maxima + \"ms\");\n\n    context.set('historial_latencias', []);\n    context.set('latencia_minima', null);\n    context.set('latencia_maxima', null);\n}\nreturn msg;",
-        "outputs": 1,
+        "func": "if (!msg.payload || msg.payload.corrected_tr === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_tr);\nvar t_captura           = Date.now();\nvar latencia            = t_captura - t_emision_corregido;\n\nvar t_emision_original  = Number(msg.payload.tr);\nvar offset_calibration  = Number(msg.payload.offset);\n\n// =================================================================\n// 1. FORMATO PARA SALIDA 1 (CSV: Lecturas en tiempo real)\n// =================================================================\n// Construimos la línea CSV directamente como String\nvar csvLine = `${t_captura},${t_emision_original},${t_emision_corregido},${offset_calibration},${latencia}`;\n\nvar msgCSV = {\n    payload: csvLine\n};\n\n// =================================================================\n// 2. LÓGICA DE HISTORIAL Y CÁLCULO DE MEDIANA\n// =================================================================\nconst N_MENSAJES = 200;\nvar historial_latencias = context.get('historial_latencias') || [];\nvar latencia_minima = context.get('latencia_minima');\nvar latencia_maxima = context.get('latencia_maxima');\n\nif (historial_latencias.length === 0) {\n    latencia_minima = latencia;\n    latencia_maxima = latencia;\n} else {\n    if (latencia < latencia_minima) latencia_minima = latencia;\n    if (latencia > latencia_maxima) latencia_maxima = latencia;\n}\n\nhistorial_latencias.push(latencia);\ncontext.set('historial_latencias', historial_latencias);\ncontext.set('latencia_minima', latencia_minima);\ncontext.set('latencia_maxima', latencia_maxima);\n\nvar msgMediana = null; // Por defecto no emitimos nada en la salida 2\n\nif (historial_latencias.length === N_MENSAJES) {\n    historial_latencias.sort(function (a, b) { return a - b; });\n\n    var mediana_latencia = 0;\n    var mitad = Math.floor(N_MENSAJES / 2);\n\n    if (N_MENSAJES % 2 !== 0) {\n        mediana_latencia = historial_latencias[mitad];\n    } else {\n        mediana_latencia = (historial_latencias[mitad - 1] + historial_latencias[mitad]) / 2;\n    }\n\n    node.warn(\"Mediana Latencia: \" + mediana_latencia + \"ms\"\n    +\" || Piso: \" + latencia_minima + \"ms\"\n    +\" || Techo: \" + latencia_maxima + \"ms\");\n\n    // Formateamos el objeto JSON para la Salida 2\n    msgMediana = {\n        payload: {\n            timestamp_calculo: Date.now(),\n            muestras_analizadas: N_MENSAJES,\n            mediana_latencia_ms: mediana_latencia,\n            latencia_minima_ms: latencia_minima,\n            latencia_maxima_ms: latencia_maxima,\n            offset_aplicado_ms: offset_calibration\n        }\n    };\n\n    // Reiniciar contadores del contexto\n    context.set('historial_latencias', []);\n    context.set('latencia_minima', null);\n    context.set('latencia_maxima', null);\n\n\n    // =================================================================\n    // 3. RETORNO MULTI-SALIDA (Salida 1: CSV, Salida 2: JSON)\n    // =================================================================\n    // Salida 1 enviará siempre un mensaje; Salida 2 solo enviará un mensaje cada 200 iteraciones\n    return [msgCSV, msgMediana];\n}\n\n",
+        "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
         "x": 370,
-        "y": 320,
+        "y": 420,
         "wires": [
             [
+                "b9ce88aac0e7afb6"
+            ],
+            [
+                "571f9769a72edf4b",
                 "7fecb52080d54fc6"
             ]
+        ]
+    },
+    {
+        "id": "b9ce88aac0e7afb6",
+        "type": "file",
+        "z": "baf8fbf07fc84ccc",
+        "name": "",
+        "filename": "/data/results_hivemq/lecturas.csv",
+        "filenameType": "str",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "utf8",
+        "x": 680,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "571f9769a72edf4b",
+        "type": "file",
+        "z": "baf8fbf07fc84ccc",
+        "name": "",
+        "filename": "/data/results/mediana_hivemq.json",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 680,
+        "y": 440,
+        "wires": [
+            []
         ]
     },
     {
