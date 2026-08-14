@@ -22,8 +22,8 @@ Para configurar las credenciales y parámetros de ejecución del proyecto, debes
 ```env
 MQTT_BROKER=tu_host.s1.eu.hivemq.cloud
 MQTT_PORT=8883
-MQTT_USERNAME=
-MQTT_PASSWORD=
+MQTT_USERNAME=username_hivemq
+MQTT_PASSWORD=password_hivemq
 FLOW_FILE=flows_mosquitto.json
 
 ```
@@ -32,7 +32,7 @@ FLOW_FILE=flows_mosquitto.json
 
 ### 🛠️ Comandos Principales
 
-#### 1. Iniciar el Entorno
+#### 1. Iniciar el Entorno de Vagrant
 Para crear y encender la máquina virtual, instalar Docker y desplegar automáticamente los contenedores de Node-RED y Mosquitto:
 ```bash
 vagrant up
@@ -78,6 +78,25 @@ Si deseas borrar la máquina virtual por completo (tus archivos locales en el re
 vagrant destroy -f
 
 ```
+
+### Entorno
+
+Vagrant crea una máquina virtual que crea containers de Docker con NodeRED y Mosquitto
+
+1. Desde el Vagrantfile se ejecuta el script setup.sh que prepara el entorno de trabajo de Docker Compose 
+2. Docker Compose levanta contenedores con NodeRED y Mosquitto. Para inicializar el flow de NodeRED utiliza el archivo flows.json 
+3. Docker levanta las variables de entorno que utiliza desde el .env
+4. NodeRED levanta las variables de entorno desde la configuración del entorno de Docker (nota: el username y password de HiveMQ se levantan desde el archivo flows_cred.json)
+5. Coexisten dos flows a la vez (según el broker): Mosquitto y HiveMQ. Quien ejecuta está definido por la constante `MQTT_BROKER_OPTION`en el archivo `pingpong_timestamp.ino`. Modificarla y recargar programa en ESP32 para alternar entre un broker y otro.
+
+#### Troubleshooting
+
+Ante errores en la máquina virtual provista por Vagrant, utilizar comandos de reinicio o de destrucción y volver a generar entorno
+
+Ante errores en Docker, probar eliminar o reiniciar contenedores y volúmenes
+
+Ante errores derivados de la comunicación entre ESP32 y NodeRED, reiniciar microcontrolador o recargar programa o archivos locales de LittleFS.
+
 
 ---
 
