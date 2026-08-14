@@ -26,9 +26,9 @@ vagrant up
 
 ```
 
-> **Nota:** La carpeta `./node-red-data` de tu máquina local se sincroniza automáticamente con la VM. Cualquier flujo o archivo generado (`lecturas.csv`, `medianas.json`) aparecerá directamente en tu computadora.
-> 
-> 
+**Nota:** La carpeta `./node-red-data` de tu máquina local se sincroniza automáticamente con la VM. Cualquier flujo o archivo generado (`lecturas.csv`, `medianas.json`) aparecerá directamente en tu computadora.
+
+
 
 #### 2. Reaplicar Cambios o Provisionamiento
 
