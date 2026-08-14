@@ -1,4 +1,3 @@
-```markdown
 # ESP32 & Node-RED: Latency & RTT Calibration System
 
 ## 📌 Propósito General
@@ -142,4 +141,3 @@ El flujo de Node-RED está preparado para capturar los datos enviados por la ESP
 
 ```
 
-```
