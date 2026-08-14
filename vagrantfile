@@ -1,56 +1,91 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
 Vagrant.configure("2") do |config|
-  # 1. Imagen base (Box)
-  config.vm.box = "ubuntu/focal64"
+  # Imagen base de Ubuntu 22.04 LTS (Jammy Jellyfish)
+  config.vm.box = "ubuntu/jammy64"
   config.vm.hostname = "servidor-iot"
 
-  # 2. Configuración de Red y Puertos
+  # -------------------------------------------------------------------
+  # 1. Reenvío de Puertos (Host -> Guest)
+  # -------------------------------------------------------------------
+  # Puerto de la interfaz web de Node-RED
   config.vm.network "forwarded_port", guest: 1880, host: 1880, auto_correct: true
+  # Puerto estándar del broker MQTT (Mosquitto)
   config.vm.network "forwarded_port", guest: 1883, host: 1883, auto_correct: true
 
-  # 3. Recursos de Hardware (VirtualBox)
+  # -------------------------------------------------------------------
+  # 2. Recurso y Configuración de VirtualBox
+  # -------------------------------------------------------------------
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
-    vb.cpus = 1
-    vb.name = "VM_IoT_NodeRED_Mosquitto"
-    
-    vb.customize ["modifyvm", :id, "--nested-hw-virt", "off"]
-    vb.customize ["modifyvm", :id, "--hwvirtex", "on"]
-    #vb.customize ["modifyvm", :id, "--vtxvpid", "on"]
-    #vb.customize ["modifyvm", :id, "--pae", "on"]
-    #vb.customize ["modifyvm", :id, "--paravirtprovider", "kvm"] # Utiliza la interfaz paravirtualizada nativa de Linux
-    
-    # Previene pánicos por desfasaje de reloj en el kernel
-    # vb.customize ["modifyvm", :id, "--usehyperpacing", "on"]
+    vb.cpus = 2
+    vb.name = "VM_IoT_NodeRED"
   end
 
-  # 4. Aprovisionamiento (Provisioning)
+  # -------------------------------------------------------------------
+  # 3. Aprovisionamiento por Shell Script
+  # -------------------------------------------------------------------
   config.vm.provision "shell", inline: <<-SHELL
-    
-    # Actualizar paquetes de Ubuntu
-    echo "Actualizando paquetes de Ubuntu"
+    set -e
+
+    echo "=================================================="
+    echo " 1. Instalando Docker y Docker Compose Plugin"
+    echo "=================================================="
     apt-get update -y
-    
-    # Instalar dependencias
     apt-get install -y ca-certificates curl gnupg lsb-release
+
+    # Agregar la clave GPG oficial de Docker
     mkdir -p /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    fi
+
+    # Configurar el repositorio oficial de Docker
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
       $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
     apt-get update -y
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    
-    # Dar permisos a Docker
+
+    # Añadir al usuario vagrant al grupo docker para evitar usar sudo en el contenedor
     usermod -aG docker vagrant
-    
-    # Ejecutar Compose
+
+    echo "=================================================="
+    echo " 2. Ejecutando el script de preparación (setup.sh)"
+    echo "=================================================="
     cd /vagrant
+
+    # Dar permisos de ejecución a setup.sh si existe
+    if [ -f setup.sh ]; then
+      chmod +x setup.sh
+      ./setup.sh
+    else
+      echo "⚠️  No se encontró setup.sh. Creando carpetas y permisos básicos..."
+      mkdir -p node-red-data mosquitto/config
+      chown -R 1000:1000 node-red-data mosquitto
+      chmod -R 775 node-red-data mosquitto
+    fi
+
+    echo "=================================================="
+    echo " 3. Levantando los contenedores de Docker"
+    echo "=================================================="
+    # Inicia los servicios en segundo plano
     docker compose up -d
 
-    echo "Ejecutando Entorno IoT"
-    
-    
-    
+    echo "=================================================="
+    echo " 4. Impresión de Logs de Node-RED"
+    echo "=================================================="
+    # Esperar 5 segundos para permitir que el proceso de Node-RED inicie su output
+    sleep 5
+
+    # Imprime las últimas 50 líneas de logs de Node-RED y se desconecta
+    docker compose logs --tail=50 nodered
+
+    echo ""
+    echo "--------------------------------------------------"
+    echo " Accede a Node-RED en: http://localhost:1880"
+    echo "--------------------------------------------------"
   SHELL
 end

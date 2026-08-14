@@ -34,7 +34,7 @@ echo "📋 Copiando archivos de configuración..."
 # 4. Asignación de Permisos (UID 1000 para contenedores)
 # ==========================================
 echo "🔒 Ajustando permisos para Docker (UID 1000:1000)..."
-sudo chown -R 1000:1000 ./node-red-data ./mosquitto
-sudo chmod -R 775 ./node-red-data ./mosquitto
+sudo chown -R 1000:1000 ./node-red-data ./mosquitto 2>/dev/null || echo "ℹ️  Carpeta compartida detectada: chown omitido para la carpeta sincronizada."
+sudo chmod -R 777 ./node-red-data ./mosquitto 2>/dev/null || true
 
 echo "✅ ¡Configuración completada con éxito! Ya puedes ejecutar 'docker compose up -d'."
