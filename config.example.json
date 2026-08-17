@@ -1,0 +1,8 @@
+{
+"ssid": "WiFi name",
+"password": "WiFi password",
+"mqtt_server": "xxxxxxxx.s1.eu.hivemq.cloud",
+"mqtt_username": "username",
+"mqtt_password": "password",
+"mosquitto_server": "192.168.0.XXX"
+}

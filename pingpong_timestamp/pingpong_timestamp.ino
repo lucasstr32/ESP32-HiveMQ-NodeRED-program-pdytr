@@ -325,7 +325,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   long long t1 = atoll(buf);
 
   long long rtt    = t2 - t0Ping;
-  long long offset = t1 - t0Ping - rtt / 2;  // Cristian
+  long long offset = t1 - t0Ping - rtt / 2;  
 
   lastCalculatedRTT = rtt;
   lastCalculatedOffset = offset;
