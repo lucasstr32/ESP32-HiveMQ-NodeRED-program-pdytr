@@ -4,6 +4,8 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+int cant = 0;
+
 // --- Credential buffers ---
 char wifissid_buffer[32];
 char wifipass_buffer[64];
@@ -75,11 +77,11 @@ void setup() {
   }
   Serial.printf("\n[WiFi OK] IP: %s\n", WiFi.localIP().toString().c_str());
   WiFi.setSleep(false);
-
+  timeSynch();
   
   if(MQTT_BROKER_OPTION == "HiveMQ"){
     Serial.println("[ENV] Configurando entorno seguro para HiveMQ Cloud...");
-    timeSynch();
+    
     wifiClientSecure.setCACert(ca_cert_content.c_str());
     if (loadCACertificate()) {
       wifiClientSecure.setCACert(ca_cert_content.c_str());
@@ -360,9 +362,9 @@ void loop() {
     long long emissionTimestampCorrected = emissionTimestamp + offsetMs;
 
     char msg[80];
-    sprintf(msg, "{\"tr\":%lld,\"corrected_tr\":%lld,\"offset\":%lld}",
+    sprintf(msg, "{\"emission_ts\":%lld,\"corrected_ts\":%lld,\"offset\":%lld}",
             emissionTimestamp, emissionTimestampCorrected, offsetMs);
-
+    Serial.printf("Enviados: %d\n", cant++);
     Serial.printf("Sending: %s\n", msg);
     mqttClient.publish(TOPIC_DATA, msg);
   }
