@@ -14,7 +14,7 @@ char mqttusername_buffer[32];
 char mqttpassword_buffer[32];
 
 /* --- Constants that links to credential buffers */
-const char* MQTT_BROKER_OPTION = "HiveMQ"; // "HiveMQ" "Mosquitto"
+const char* MQTT_BROKER_OPTION = "Mosquitto"; // "HiveMQ" "Mosquitto"
 const char* WIFISSID     = wifissid_buffer;
 const char* WIFIPASSWORD = wifipass_buffer;
 const char* MQTTSERVER   = mqttsv_buffer;
