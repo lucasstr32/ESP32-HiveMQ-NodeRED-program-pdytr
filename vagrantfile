@@ -53,16 +53,16 @@ Vagrant.configure("2") do |config|
     usermod -aG docker vagrant
 
     echo "=================================================="
-    echo " 2. Ejecutando el script de preparación (setup.sh)"
+    echo " 2. Ejecutando el script de preparación (setup_vagrant.sh)"
     echo "=================================================="
     cd /vagrant
 
-    # Dar permisos de ejecución a setup.sh si existe
-    if [ -f setup.sh ]; then
-      chmod +x setup.sh
-      ./setup.sh
+    # Dar permisos de ejecución a setup_vagrant.sh si existe
+    if [ -f setup_vagrant.sh ]; then
+      chmod +x setup_vagrant.sh
+      ./setup_vagrant.sh
     else
-      echo "⚠️  No se encontró setup.sh. Creando carpetas y permisos básicos..."
+      echo "⚠️  No se encontró setup_vagrant.sh. Creando carpetas y permisos básicos..."
       mkdir -p node-red-data mosquitto/config
       chown -R 1000:1000 node-red-data mosquitto
       chmod -R 775 node-red-data mosquitto
