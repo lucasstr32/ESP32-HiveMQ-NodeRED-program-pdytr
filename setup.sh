@@ -12,6 +12,10 @@ echo "📁 Creando estructura de directorios..."
 mkdir -p node-red-data
 mkdir -p node-red-data/results
 mkdir -p mosquitto/config
+mkdir -p pingpong_timestamp/data
+
+touch -env
+touch pingpong_timestamp/data/config.json
 
 # ==========================================
 # 2. Definir / Verificar archivo .env

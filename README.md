@@ -15,16 +15,31 @@ Toda la infraestructura (Docker, Mosquitto, Node-RED) se despliega dentro de una
 * Git.
 
 
-### 🔑 Configuración de Variables de Entorno (`.env`)
+### 🔑 Configuración de Variables de Entorno (`.env`) y otros archivos
 
 Para configurar las credenciales y parámetros de ejecución del proyecto, debes crear un archivo llamado `.env` en la raíz de tu repositorio basándote en el siguiente ejemplo:
 
 ```env
-MQTT_BROKER=tu_host.s1.eu.hivemq.cloud
+MQTT_BROKER="tu_host.s1.eu.hivemq.cloud"
 MQTT_PORT=8883
-MQTT_USERNAME=username_hivemq
-MQTT_PASSWORD=password_hivemq
-FLOW_FILE=flows_mosquitto.json
+MQTT_USERNAME="username_hivemq"
+MQTT_PASSWORD="password_hivemq"
+FLOW_FILE=flows.json
+
+```
+
+1. Debes incluir el certificado CA del servidor (archivo .pem) en la carpeta /pingpong_timestamp/data/ de la ESP32 con el nombre `hivemq_ca.pem`. Más info. en https://docs.hivemq.com/hivemq/4.9/user-guide/howtos.html#server
+2. Debe incluir un archivo config.json en la carpeta /pingpong_timestamp/data/ con el siguiente contenido
+
+```json
+{
+  "ssid": "NOMBRE_DE_TU_RED_WIFI",
+  "password": "CONTRASEÑA_WIFI",
+  "mosquitto_server": "192.168.0.X",
+  "mqtt_server": "tu_host.s1.eu.hivemq.cloud",
+  "mqtt_username": "username_hivemq",
+  "mqtt_password": "password_hivemq"
+}
 
 ```
 
