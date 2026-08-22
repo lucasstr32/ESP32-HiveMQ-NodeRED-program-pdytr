@@ -30,8 +30,8 @@ Para configurar las credenciales y parámetros de ejecución del proyecto, debes
 ```env
 MQTT_BROKER="tu_host.s1.eu.hivemq.cloud"
 MQTT_PORT=8883
-MQTT_USERNAME="username_hivemq"
-MQTT_PASSWORD="password_hivemq"
+MQTT_USER="username_hivemq"
+MQTT_PASS="password_hivemq"
 FLOW_FILE=flows.json
 
 ```
