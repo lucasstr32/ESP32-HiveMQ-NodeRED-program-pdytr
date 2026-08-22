@@ -204,15 +204,15 @@
         "id": "fadee80f37e95732",
         "type": "function",
         "z": "1665b9e3ca9a5ffd",
-        "name": "pong_function",
-        "func": "var t1 = Date.now().toString();\nmsg.payload = t1;\nmsg.topic = \"pdytr/pong\";\nreturn msg;",
+        "name": "pong",
+        "func": "var t2 = Date.now().toString();\nmsg.payload = t2;\nmsg.topic = \"pdytr/pong\";\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 460,
+        "x": 430,
         "y": 160,
         "wires": [
             [
@@ -225,7 +225,7 @@
         "id": "ca9d87a53d6cefe9",
         "type": "debug",
         "z": "1665b9e3ca9a5ffd",
-        "name": "mosquitto lat",
+        "name": "mosquitto rtt",
         "active": true,
         "tosidebar": true,
         "console": true,
@@ -234,28 +234,32 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 580,
-        "y": 460,
+        "x": 560,
+        "y": 480,
         "wires": []
     },
     {
         "id": "543a4b3c423f6212",
         "type": "function",
         "z": "1665b9e3ca9a5ffd",
-        "name": "latency_function",
-        "func": "if (!msg.payload || msg.payload.corrected_ts === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_ts);\nvar t_captura = Date.now();\nvar latencia = t_captura - t_emision_corregido;\n\nvar t_emision_original = Number(msg.payload.emission_ts);\nvar offset_calibration = Number(msg.payload.offset);\n\nvar csvLine = `${t_captura},${t_emision_original},${t_emision_corregido},${offset_calibration},${latencia}`;\n\nvar msgCSV = {\n    payload: csvLine\n};\n\nreturn msgCSV;\n\n\n",
-        "outputs": 1,
+        "name": "rtt_function",
+        "func": "if (!msg.payload || msg.payload.corrected_tr === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_tr);\nvar t_captura           = Date.now();\nvar latencia            = t_captura - t_emision_corregido;\n\nvar t_emision_original  = Number(msg.payload.tr);\nvar offset_calibration  = Number(msg.payload.offset);\n\n// =================================================================\n// 1. FORMATO PARA SALIDA 1 (CSV: Lecturas en tiempo real)\n// =================================================================\n// Construimos la línea CSV directamente como String\nvar csvLine = `${t_captura},${t_emision_original},${t_emision_corregido},${offset_calibration},${latencia}`;\n\nvar msgCSV = {\n    payload: csvLine\n};\n\n// =================================================================\n// 2. LÓGICA DE HISTORIAL Y CÁLCULO DE MEDIANA\n// =================================================================\nconst N_MENSAJES = 200;\nvar historial_latencias = context.get('historial_latencias') || [];\nvar latencia_minima = context.get('latencia_minima');\nvar latencia_maxima = context.get('latencia_maxima');\n\nif (historial_latencias.length === 0) {\n    latencia_minima = latencia;\n    latencia_maxima = latencia;\n} else {\n    if (latencia < latencia_minima) latencia_minima = latencia;\n    if (latencia > latencia_maxima) latencia_maxima = latencia;\n}\n\nhistorial_latencias.push(latencia);\ncontext.set('historial_latencias', historial_latencias);\ncontext.set('latencia_minima', latencia_minima);\ncontext.set('latencia_maxima', latencia_maxima);\n\nvar msgMediana = null; // Por defecto no emitimos nada en la salida 2\n\nif (historial_latencias.length === N_MENSAJES) {\n    historial_latencias.sort(function (a, b) { return a - b; });\n\n    var mediana_latencia = 0;\n    var mitad = Math.floor(N_MENSAJES / 2);\n\n    if (N_MENSAJES % 2 !== 0) {\n        mediana_latencia = historial_latencias[mitad];\n    } else {\n        mediana_latencia = (historial_latencias[mitad - 1] + historial_latencias[mitad]) / 2;\n    }\n\n    node.warn(\"Mediana Latencia: \" + mediana_latencia + \"ms\"\n    +\" || Piso: \" + latencia_minima + \"ms\"\n    +\" || Techo: \" + latencia_maxima + \"ms\");\n\n    // Formateamos el objeto JSON para la Salida 2\n    msgMediana = {\n        payload: {\n            timestamp_calculo: Date.now(),\n            muestras_analizadas: N_MENSAJES,\n            mediana_latencia_ms: mediana_latencia,\n            latencia_minima_ms: latencia_minima,\n            latencia_maxima_ms: latencia_maxima,\n            offset_aplicado_ms: offset_calibration\n        }\n    };\n\n    // Reiniciar contadores del contexto\n    context.set('historial_latencias', []);\n    context.set('latencia_minima', null);\n    context.set('latencia_maxima', null);\n\n\n    // =================================================================\n    // 3. RETORNO MULTI-SALIDA (Salida 1: CSV, Salida 2: JSON)\n    // =================================================================\n    // Salida 1 enviará siempre un mensaje; Salida 2 solo enviará un mensaje cada 200 iteraciones\n    return [msgCSV, msgMediana];\n}\n\n",
+        "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
+        "x": 370,
         "y": 380,
         "wires": [
             [
                 "ca9d87a53d6cefe9",
                 "0fe0ca46703fb97c"
+            ],
+            [
+                "ca9d87a53d6cefe9",
+                "478dd33548e855f9"
             ]
         ]
     },
@@ -411,7 +415,24 @@
         "overwriteFile": "false",
         "encoding": "utf8",
         "x": 700,
-        "y": 380,
+        "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "478dd33548e855f9",
+        "type": "file",
+        "z": "1665b9e3ca9a5ffd",
+        "name": "",
+        "filename": "/data/results/mediana_mosquitto.json",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 710,
+        "y": 400,
         "wires": [
             []
         ]
@@ -422,7 +443,7 @@
         "z": "baf8fbf07fc84ccc",
         "name": "",
         "topic": "pdytr/tr",
-        "qos": "0",
+        "qos": "2",
         "datatype": "json",
         "broker": "5f9467bc6c9ed2c0",
         "nl": false,
@@ -442,15 +463,15 @@
         "id": "f5660a036059adce",
         "type": "function",
         "z": "baf8fbf07fc84ccc",
-        "name": "pong_function",
-        "func": "var t1 = Date.now().toString();\nmsg.payload = t1;\nmsg.topic = \"pdytr/pong\";\nreturn msg;",
+        "name": "pong",
+        "func": "var t2 = Date.now().toString();\nmsg.payload = t2;\nmsg.topic = \"pdytr/pong\";\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
+        "x": 350,
         "y": 220,
         "wires": [
             [
@@ -481,8 +502,8 @@
         "id": "7fecb52080d54fc6",
         "type": "debug",
         "z": "baf8fbf07fc84ccc",
-        "name": "hivemq lat",
-        "active": true,
+        "name": "hivemq rtt",
+        "active": false,
         "tosidebar": true,
         "console": true,
         "tostatus": false,
@@ -500,7 +521,7 @@
         "z": "baf8fbf07fc84ccc",
         "name": "",
         "topic": "pdytr/ping",
-        "qos": "0",
+        "qos": "2",
         "datatype": "json",
         "broker": "5f9467bc6c9ed2c0",
         "nl": false,
@@ -598,19 +619,22 @@
         "id": "e522dc68b404f8bc",
         "type": "function",
         "z": "baf8fbf07fc84ccc",
-        "name": "latency_function",
-        "func": "if (!msg.payload || msg.payload.corrected_ts === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_ts);\nvar t_captura           = Date.now();\nvar latencia            = t_captura - t_emision_corregido;\n\nvar t_emision_original = Number(msg.payload.emission_ts);\nvar offset_calibration  = Number(msg.payload.offset);\n\nvar csvLine = `${t_captura},${t_emision_original},${t_emision_corregido},${offset_calibration},${latencia}`;\n\nvar msgCSV = {\n    payload: csvLine\n};\n\nreturn msgCSV;\n\n\n",
-        "outputs": 1,
+        "name": "rtt_function",
+        "func": "if (!msg.payload || msg.payload.corrected_tr === undefined) return null;\n\nvar t_emision_corregido = Number(msg.payload.corrected_tr);\nvar t_captura           = Date.now();\nvar latencia            = t_captura - t_emision_corregido;\n\nvar t_emision_original  = Number(msg.payload.tr);\nvar offset_calibration  = Number(msg.payload.offset);\n\n// =================================================================\n// 1. FORMATO PARA SALIDA 1 (CSV: Lecturas en tiempo real)\n// =================================================================\n// Construimos la línea CSV directamente como String\nvar csvLine = `${t_captura},${t_emision_original},${t_emision_corregido},${offset_calibration},${latencia}`;\n\nvar msgCSV = {\n    payload: csvLine\n};\n\n// =================================================================\n// 2. LÓGICA DE HISTORIAL Y CÁLCULO DE MEDIANA\n// =================================================================\nconst N_MENSAJES = 200;\nvar historial_latencias = context.get('historial_latencias') || [];\nvar latencia_minima = context.get('latencia_minima');\nvar latencia_maxima = context.get('latencia_maxima');\n\nif (historial_latencias.length === 0) {\n    latencia_minima = latencia;\n    latencia_maxima = latencia;\n} else {\n    if (latencia < latencia_minima) latencia_minima = latencia;\n    if (latencia > latencia_maxima) latencia_maxima = latencia;\n}\n\nhistorial_latencias.push(latencia);\ncontext.set('historial_latencias', historial_latencias);\ncontext.set('latencia_minima', latencia_minima);\ncontext.set('latencia_maxima', latencia_maxima);\n\nvar msgMediana = null; // Por defecto no emitimos nada en la salida 2\n\nif (historial_latencias.length === N_MENSAJES) {\n    historial_latencias.sort(function (a, b) { return a - b; });\n\n    var mediana_latencia = 0;\n    var mitad = Math.floor(N_MENSAJES / 2);\n\n    if (N_MENSAJES % 2 !== 0) {\n        mediana_latencia = historial_latencias[mitad];\n    } else {\n        mediana_latencia = (historial_latencias[mitad - 1] + historial_latencias[mitad]) / 2;\n    }\n\n    node.warn(\"Mediana Latencia: \" + mediana_latencia + \"ms\"\n    +\" || Piso: \" + latencia_minima + \"ms\"\n    +\" || Techo: \" + latencia_maxima + \"ms\");\n\n    // Formateamos el objeto JSON para la Salida 2\n    msgMediana = {\n        payload: {\n            timestamp_calculo: Date.now(),\n            muestras_analizadas: N_MENSAJES,\n            mediana_latencia_ms: mediana_latencia,\n            latencia_minima_ms: latencia_minima,\n            latencia_maxima_ms: latencia_maxima,\n            offset_aplicado_ms: offset_calibration\n        }\n    };\n\n    // Reiniciar contadores del contexto\n    context.set('historial_latencias', []);\n    context.set('latencia_minima', null);\n    context.set('latencia_maxima', null);\n\n\n    // =================================================================\n    // 3. RETORNO MULTI-SALIDA (Salida 1: CSV, Salida 2: JSON)\n    // =================================================================\n    // Salida 1 enviará siempre un mensaje; Salida 2 solo enviará un mensaje cada 200 iteraciones\n    return [msgCSV, msgMediana];\n}\n\n",
+        "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
+        "x": 370,
         "y": 420,
         "wires": [
             [
-                "b9ce88aac0e7afb6",
+                "b9ce88aac0e7afb6"
+            ],
+            [
+                "571f9769a72edf4b",
                 "7fecb52080d54fc6"
             ]
         ]
@@ -627,7 +651,24 @@
         "overwriteFile": "false",
         "encoding": "utf8",
         "x": 680,
-        "y": 420,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "571f9769a72edf4b",
+        "type": "file",
+        "z": "baf8fbf07fc84ccc",
+        "name": "",
+        "filename": "/data/results/mediana_hivemq.json",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 680,
+        "y": 440,
         "wires": [
             []
         ]

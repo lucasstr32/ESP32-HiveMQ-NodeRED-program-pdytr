@@ -10,6 +10,7 @@ echo "🚀 Iniciando la configuración del entorno para Node-RED y Mosquitto..."
 # ==========================================
 echo "📁 Creando estructura de directorios..."
 mkdir -p node-red-data
+mkdir -p node-red-data/results
 mkdir -p mosquitto/config
 
 # ==========================================
