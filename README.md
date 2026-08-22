@@ -17,6 +17,14 @@ Toda la infraestructura (Docker, Mosquitto, Node-RED) se despliega dentro de una
 
 ### 🔑 Configuración de Variables de Entorno (`.env`) y otros archivos
 
+Ejecutar:
+```bash
+mkdir -p pingpong_timestamp/data
+
+touch pingpong_timestamp/data/config.json
+touch .env
+```
+
 Para configurar las credenciales y parámetros de ejecución del proyecto, debes crear un archivo llamado `.env` en la raíz de tu repositorio basándote en el siguiente ejemplo:
 
 ```env
